@@ -69,6 +69,18 @@ lazy val commonSettings = Seq(
         "org.scala-lang"          % "scalap"                      % scalaVersion.value) ++
     commonDeps)
 
+lazy val worlockDeps = Seq(
+  "com.github.docker-java" % "docker-java" % "3.0.6")
+
+lazy val worlockSettings = Seq(
+  name := "worlock",
+  organization := "com.synereo",
+  libraryDependencies ++= worlockDeps)
+
+lazy val worlock = (project in file("worlock"))
+  .settings(worlockSettings: _*)
+  .settings(commonSettings: _*)
+
 lazy val specialkDeps = Seq(
   "biz.source_code"           % "base64coder"       % base64coderVersion,
   "com.rabbitmq"              % "amqp-client"       % amqpClientVersion,
@@ -170,7 +182,7 @@ lazy val gloseval = (project in file("gloseval"))
   .enablePlugins(BuildInfoPlugin)
 
 lazy val root = (project in file("."))
-  .aggregate(specialk, agentService, gloseval)
-  .dependsOn(specialk, agentService, gloseval)
+  .aggregate(specialk, agentService, gloseval, worlock)
+  .dependsOn(specialk, agentService, gloseval, worlock)
   .settings(commonSettings: _*)
   .enablePlugins(GitVersioning)
