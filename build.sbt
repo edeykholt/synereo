@@ -183,7 +183,7 @@ lazy val glosevalDockerSettings = Seq(
       .:+((baseDirectory.value / "supervisord.conf") -> "supervisord.conf")
   },
   buildBaseImage := {
-    val cmd = s"docker build -t synereo/base ${baseDirectory.value}/src/main/docker/base"
+    val cmd = s"docker build -t synereo/base:latest ${baseDirectory.value}/src/main/docker/base"
     Process(cmd) !
   },
   copyClientResources := {
