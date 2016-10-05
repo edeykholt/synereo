@@ -1,4 +1,5 @@
 import BNFC._
+import com.typesafe.sbt.packager.docker._
 
 lazy val ourScalaVersion    = "2.11.8"
 lazy val amqpClientVersion  = "2.6.1"
@@ -165,13 +166,6 @@ lazy val glosevalDeps = Seq(
   "org.bouncycastle"            % "bcprov-jdk15on"           % "1.54",
   "org.scalatest"              %% "scalatest"                % scalatestVersion % "test")
 
-def stageForDockerizing = Command.command("stageTarball") { state =>
-  val newState: State = Project.extract(state).append(
-    Seq(target in Universal := (baseDirectory in worlock).value /  "src" / "main" / "docker" / "node"),
-    state)
-  Project.extract(newState).runTask(packageZipTarball in Universal, newState)._1
-}
-
 lazy val glosevalSettings = Seq(
   name := "GLoSEval",
   organization := "com.biosimilarity",
@@ -180,13 +174,37 @@ lazy val glosevalSettings = Seq(
   buildInfoPackage := "com.biosimilarity.evaluator",
   fork := true,
   parallelExecution in Test := false,
-  commands += stageForDockerizing)
+  mappings in Universal := {
+    val deduped: Seq[(File, String)] = (mappings in Universal).value
+      .map((x: (File, String)) => x.swap)
+      .toMap
+      .toSeq
+      .map((x: (String, File)) => x.swap)
+    deduped
+      .:+((baseDirectory.value / "eval.conf") -> "eval.conf")
+      .:+((baseDirectory.value / "log.conf") -> "log.conf")
+      .:+((baseDirectory.value / "supervisord.conf") -> "supervisord.conf")
+  },
+  dockerCommands := Seq(
+    Cmd("FROM", "synereo/base"),
+    Cmd("WORKDIR", "/opt/docker"),
+    Cmd("ADD", "opt", "/opt"),
+    Cmd("USER", "root"),
+    Cmd("RUN", "chown", "-R", "synereo:synereo", s"${(defaultLinuxInstallLocation in Docker).value}"),
+    Cmd("RUN", "chmod", "a+x", s"${(defaultLinuxInstallLocation in Docker).value}/bin/${executableScriptName.value}"),
+    Cmd("RUN", "mv", "supervisord.conf", "/etc/supervisor/conf.d/supervisord.conf"),
+    Cmd("USER", "synereo"),
+    Cmd("RUN", "bin/gloseval", "gencert", "--self-signed"),
+    Cmd("USER", "root"),
+    Cmd("EXPOSE", "8567", "9876"),
+    ExecCmd("CMD", "/usr/bin/supervisord")))
 
 lazy val gloseval = (project in file("gloseval"))
   .settings(glosevalSettings: _*)
   .settings(commonSettings: _*)
   .dependsOn(specialk, agentService)
   .enablePlugins(JavaAppPackaging)
+  .enablePlugins(DockerPlugin)
   .enablePlugins(BuildInfoPlugin)
 
 lazy val root = (project in file("."))
@@ -194,5 +212,3 @@ lazy val root = (project in file("."))
   .dependsOn(specialk, agentService, gloseval, worlock)
   .settings(commonSettings: _*)
   .enablePlugins(GitVersioning)
-
-addCommandAlias("stageTarballForDocker", ";project gloseval ;stageTarball")
