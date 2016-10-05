@@ -192,7 +192,7 @@ lazy val glosevalDockerSettings = Seq(
     IO.createDirectory(destDir)
     IO.copyDirectory(sourceDir, destDir)
   },
-  (stage in Docker) := {
+  stage in Docker := {
     buildBaseImage.value
     copyClientResources.value
     (stage in Docker).value
