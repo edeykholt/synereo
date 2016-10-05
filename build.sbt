@@ -165,6 +165,13 @@ lazy val glosevalDeps = Seq(
   "org.bouncycastle"            % "bcprov-jdk15on"           % "1.54",
   "org.scalatest"              %% "scalatest"                % scalatestVersion % "test")
 
+def stageForDockerizing = Command.command("stageTarball") { state =>
+  val newState: State = Project.extract(state).append(
+    Seq(target in Universal := (baseDirectory in worlock).value /  "src" / "main" / "docker" / "node"),
+    state)
+  Project.extract(newState).runTask(packageZipTarball in Universal, newState)._1
+}
+
 lazy val glosevalSettings = Seq(
   name := "GLoSEval",
   organization := "com.biosimilarity",
@@ -172,7 +179,8 @@ lazy val glosevalSettings = Seq(
   buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion),
   buildInfoPackage := "com.biosimilarity.evaluator",
   fork := true,
-  parallelExecution in Test := false)
+  parallelExecution in Test := false,
+  commands += stageForDockerizing)
 
 lazy val gloseval = (project in file("gloseval"))
   .settings(glosevalSettings: _*)
@@ -186,3 +194,5 @@ lazy val root = (project in file("."))
   .dependsOn(specialk, agentService, gloseval, worlock)
   .settings(commonSettings: _*)
   .enablePlugins(GitVersioning)
+
+addCommandAlias("stageTarballForDocker", ";project gloseval ;stageTarball")
