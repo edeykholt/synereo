@@ -4,8 +4,7 @@ WORKDIR /home/synereo
 
 COPY gloseval-*.tgz /home/synereo/gloseval.tgz
 RUN tar xzvf gloseval.tgz
-RUN mkdir -p /opt/synereo/gloseval
-RUN mv gloseval-*/* /opt/synereo/gloseval
+RUN mv gloseval-* /opt/synereo/gloseval
 
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY eval.conf /home/synereo/eval.conf
