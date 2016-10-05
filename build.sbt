@@ -166,24 +166,36 @@ lazy val glosevalDeps = Seq(
   "org.bouncycastle"            % "bcprov-jdk15on"           % "1.54",
   "org.scalatest"              %% "scalatest"                % scalatestVersion % "test")
 
-lazy val glosevalSettings = Seq(
-  name := "GLoSEval",
-  organization := "com.biosimilarity",
-  libraryDependencies ++= glosevalDeps,
-  buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion),
-  buildInfoPackage := "com.biosimilarity.evaluator",
-  fork := true,
-  parallelExecution in Test := false,
+val buildBaseImage      = taskKey[Unit]("Builds the 'synereo/base' Docker Image")
+val copyClientResources = taskKey[Unit]("Copy the 'client' directory to the Docker staging directory")
+
+lazy val glosevalDockerSettings = Seq(
+  buildBaseImage := {
+    val cmd = s"docker build -t synereo/base ${baseDirectory.value}/src/main/docker/base"
+    Process(cmd) !
+  },
   mappings in Universal := {
-    val deduped: Seq[(File, String)] = (mappings in Universal).value
-      .map((x: (File, String)) => x.swap)
-      .toMap
-      .toSeq
-      .map((x: (String, File)) => x.swap)
+    val deduped: Seq[(File, String)] =
+      (mappings in Universal).value
+        .map((x: (File, String)) => x.swap)
+        .toMap
+        .toSeq
+        .map((x: (String, File)) => x.swap)
     deduped
       .:+((baseDirectory.value / "eval.conf") -> "eval.conf")
       .:+((baseDirectory.value / "log.conf") -> "log.conf")
       .:+((baseDirectory.value / "supervisord.conf") -> "supervisord.conf")
+  },
+  copyClientResources := {
+    val sourceDir = baseDirectory.value / "client"
+    val destDir = (stagingDirectory in Docker).value / "opt" / "docker" / "client"
+    IO.createDirectory(destDir)
+    IO.copyDirectory(sourceDir, destDir)
+  },
+  (stage in Docker) := {
+    buildBaseImage.value
+    copyClientResources.value
+    (stage in Docker).value
   },
   dockerCommands := Seq(
     Cmd("FROM", "synereo/base"),
@@ -199,8 +211,18 @@ lazy val glosevalSettings = Seq(
     Cmd("EXPOSE", "8567", "9876"),
     ExecCmd("CMD", "/usr/bin/supervisord")))
 
+lazy val glosevalSettings = Seq(
+  name := "GLoSEval",
+  organization := "com.biosimilarity",
+  libraryDependencies ++= glosevalDeps,
+  buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion),
+  buildInfoPackage := "com.biosimilarity.evaluator",
+  fork := true,
+  parallelExecution in Test := false)
+
 lazy val gloseval = (project in file("gloseval"))
   .settings(glosevalSettings: _*)
+  .settings(glosevalDockerSettings: _*)
   .settings(commonSettings: _*)
   .dependsOn(specialk, agentService)
   .enablePlugins(JavaAppPackaging)
