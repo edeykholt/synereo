@@ -18,9 +18,7 @@ RUN mkdir -p /tmp/mongo
 RUN bash -c '(sleep 180; kill $$) & exec mongod --port 10000 --dbpath /tmp/mongo --journal --smallfiles' || true
 
 RUN mkdir -p /data/db
-
 RUN mv /tmp/mongo/journal /data/db
-
 RUN chown -R mongodb:nogroup /data/db
 RUN chmod 0600 /data/db/journal/*
 
