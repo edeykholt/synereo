@@ -170,10 +170,6 @@ val buildBaseImage      = taskKey[Unit]("Builds the 'synereo/base' Docker Image"
 val copyClientResources = taskKey[Unit]("Copy the 'client' directory to the Docker staging directory")
 
 lazy val glosevalDockerSettings = Seq(
-  buildBaseImage := {
-    val cmd = s"docker build -t synereo/base ${baseDirectory.value}/src/main/docker/base"
-    Process(cmd) !
-  },
   mappings in Universal := {
     val deduped: Seq[(File, String)] =
       (mappings in Universal).value
@@ -185,6 +181,10 @@ lazy val glosevalDockerSettings = Seq(
       .:+((baseDirectory.value / "eval.conf") -> "eval.conf")
       .:+((baseDirectory.value / "log.conf") -> "log.conf")
       .:+((baseDirectory.value / "supervisord.conf") -> "supervisord.conf")
+  },
+  buildBaseImage := {
+    val cmd = s"docker build -t synereo/base ${baseDirectory.value}/src/main/docker/base"
+    Process(cmd) !
   },
   copyClientResources := {
     val sourceDir = baseDirectory.value / "client"
