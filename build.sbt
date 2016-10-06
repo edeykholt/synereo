@@ -1,5 +1,5 @@
 import BNFC._
-import com.typesafe.sbt.packager.docker._
+import com.typesafe.sbt.packager.docker.{Cmd, ExecCmd}
 
 lazy val ourScalaVersion    = "2.11.8"
 lazy val amqpClientVersion  = "2.6.1"
@@ -70,17 +70,6 @@ lazy val commonSettings = Seq(
         "org.scala-lang"          % "scalap"                      % scalaVersion.value) ++
     commonDeps)
 
-lazy val worlockDeps = Seq(
-  "com.github.docker-java" % "docker-java" % "3.0.6")
-
-lazy val worlockSettings = Seq(
-  name := "worlock",
-  organization := "com.synereo",
-  libraryDependencies ++= worlockDeps)
-
-lazy val worlock = (project in file("worlock"))
-  .settings(worlockSettings: _*)
-  .settings(commonSettings: _*)
 
 lazy val specialkDeps = Seq(
   "biz.source_code"           % "base64coder"       % base64coderVersion,
@@ -178,9 +167,9 @@ lazy val glosevalDockerSettings = Seq(
         .toSeq
         .map((x: (String, File)) => x.swap)
     deduped
-      .:+((baseDirectory.value / "eval.conf") -> "eval.conf")
-      .:+((baseDirectory.value / "log.conf") -> "log.conf")
-      .:+((baseDirectory.value / "supervisord.conf") -> "supervisord.conf")
+      .:+(baseDirectory.value / "src" / "main" / "docker" / "node" / "eval.conf" -> "eval.conf")
+      .:+(baseDirectory.value / "src" / "main" / "docker" / "node" / "log.conf" -> "log.conf")
+      .:+(baseDirectory.value / "src" / "main" / "docker" / "node" / "supervisord.conf" -> "supervisord.conf")
   },
   buildBaseImage := {
     val cmd = s"docker build -t synereo/base:latest ${baseDirectory.value}/src/main/docker/base"
@@ -188,7 +177,7 @@ lazy val glosevalDockerSettings = Seq(
   },
   copyClientResources := {
     val sourceDir = baseDirectory.value / "client"
-    val destDir = (stagingDirectory in Docker).value / "opt" / "docker" / "client"
+    val destDir = stagingDirectory.in(Docker).value / "opt" / "docker" / "client"
     IO.createDirectory(destDir)
     IO.copyDirectory(sourceDir, destDir)
   },
@@ -197,19 +186,35 @@ lazy val glosevalDockerSettings = Seq(
     copyClientResources.value
     (stage in Docker).value
   },
-  dockerCommands := Seq(
-    Cmd("FROM", "synereo/base"),
-    Cmd("WORKDIR", "/opt/docker"),
-    Cmd("ADD", "opt", "/opt"),
-    Cmd("USER", "root"),
-    Cmd("RUN", "chown", "-R", "synereo:synereo", s"${(defaultLinuxInstallLocation in Docker).value}"),
-    Cmd("RUN", "chmod", "a+x", s"${(defaultLinuxInstallLocation in Docker).value}/bin/${executableScriptName.value}"),
-    Cmd("RUN", "mv", "supervisord.conf", "/etc/supervisor/conf.d/supervisord.conf"),
-    Cmd("USER", "synereo"),
-    Cmd("RUN", "bin/gloseval", "gencert", "--self-signed"),
-    Cmd("USER", "root"),
-    Cmd("EXPOSE", "8567", "9876"),
-    ExecCmd("CMD", "/usr/bin/supervisord")))
+  dockerCommands := {
+    val localhostIpAddress = "127.0.0.1"
+    val localhostRabbitPort = "5672"
+    Seq(
+      Cmd("FROM", "synereo/base"),
+      Cmd("ENV", "DEPLOYMENT_MODE=colocated"),
+      Cmd("ENV", s"DSL_COMM_LINK_CLIENT_HOSTS=$localhostIpAddress:$localhostRabbitPort"),
+      Cmd("ENV", s"DSL_EVALUATOR_HOST=$localhostIpAddress"),
+      Cmd("ENV", s"DSL_EVALUATOR_PORT=$localhostRabbitPort"),
+      Cmd("ENV", s"DSL_EVALUATOR_PREFERRED_SUPPLIER_HOST=$localhostIpAddress"),
+      Cmd("ENV", s"DSL_EVALUATOR_PREFERRED_SUPPLIER_PORT=$localhostRabbitPort"),
+      Cmd("ENV", s"BFACTORY_COMM_LINK_SERVER_HOST=$localhostIpAddress"),
+      Cmd("ENV", s"BFACTORY_COMM_LINK_SERVER_PORT=$localhostRabbitPort"),
+      Cmd("ENV", s"BFACTORY_COMM_LINK_CLIENT_HOST=$localhostIpAddress"),
+      Cmd("ENV", s"BFACTORY_COMM_LINK_CLIENT_PORT=$localhostRabbitPort"),
+      Cmd("ENV", s"BFACTORY_EVALUATOR_HOST=$localhostIpAddress"),
+      Cmd("ENV", s"BFACTORY_EVALUATOR_PORT=$localhostRabbitPort"),
+      Cmd("WORKDIR", "/opt/docker"),
+      Cmd("ADD", "opt", "/opt"),
+      Cmd("USER", "root"),
+      Cmd("RUN", "chown", "-R", "synereo:synereo", s"${defaultLinuxInstallLocation.in(Docker).value}"),
+      Cmd("RUN", "chmod", "a+x", s"${defaultLinuxInstallLocation.in(Docker).value}/bin/${executableScriptName.value}"),
+      Cmd("RUN", "mv", "supervisord.conf", "/etc/supervisor/conf.d/supervisord.conf"),
+      Cmd("USER", "synereo"),
+      Cmd("RUN", "bin/gloseval", "gencert", "--self-signed"),
+      Cmd("USER", "root"),
+      Cmd("EXPOSE", "8567", "9876"),
+      ExecCmd("CMD", "/usr/bin/supervisord"))
+  })
 
 lazy val glosevalSettings = Seq(
   name := "GLoSEval",
@@ -228,6 +233,19 @@ lazy val gloseval = (project in file("gloseval"))
   .enablePlugins(JavaAppPackaging)
   .enablePlugins(DockerPlugin)
   .enablePlugins(BuildInfoPlugin)
+
+lazy val worlockDeps = Seq(
+  "com.github.docker-java" % "docker-java" % "3.0.6")
+
+lazy val worlockSettings = Seq(
+  name := "worlock",
+  organization := "com.synereo",
+  libraryDependencies ++= worlockDeps)
+
+lazy val worlock = (project in file("worlock"))
+  .settings(worlockSettings: _*)
+  .settings(commonSettings: _*)
+  .dependsOn(gloseval)
 
 lazy val root = (project in file("."))
   .aggregate(specialk, agentService, gloseval, worlock)

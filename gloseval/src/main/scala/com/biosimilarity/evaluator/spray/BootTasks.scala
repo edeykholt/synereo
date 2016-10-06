@@ -4,7 +4,7 @@ import java.io.File
 import java.nio.file.{Files, Path, Paths}
 import java.util.logging.{Level => JLevel, Logger => JLogger}
 
-import com.biosimilarity.evaluator.distribution.{EvalConfConfig => Config}
+import com.biosimilarity.evaluator.distribution.{DSLCommLinkCtor, EvalConfConfig => Config}
 import com.biosimilarity.evaluator.importer.Importer
 import com.biosimilarity.evaluator.util._
 import com.biosimilarity.lift.lib.amqp.AMQPUtil._
@@ -26,6 +26,8 @@ trait BootTasks {
     val (mongoHost, mongoPort)   = (Config.readString("dbHost"), Config.readInt("dbPort"))
     val (rabbitHost, rabbitPort) = (Config.readString("DSLCommLinkServerHost"), Config.readInt("DSLCommLinkServerPort"))
     logger.info(s"Starting GLoSEval in ${Config.deploymentMode.toString.toLowerCase} mode...")
+    val clientsHostsNPorts: List[(String, Int)] = DSLCommLinkCtor.clientHostsNPorts()
+    logger.info(s"Clients: $clientsHostsNPorts")
     (keystoreExists, Config.deploymentMode, rabbitIsRunning(rabbitHost, rabbitPort), mongoIsRunning(mongoHost, mongoPort)) match {
       case (false, _, _, _) =>
         logger.error("TLS Certificate not found.  Please run the 'gencert' command.")
